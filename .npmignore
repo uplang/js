@@ -1,0 +1,29 @@
+# Source files
+*.ts
+!*.d.ts
+
+# Test files
+test/
+*.test.js
+*.spec.js
+
+# Development files
+.github/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# CI/CD
+.travis.yml
+.gitlab-ci.yml
+.github/
+
+# Misc
+*.log
+coverage/
+.nyc_output/
