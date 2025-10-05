@@ -1,0 +1,60 @@
+{
+  "name": "@uplang/up",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "UP (Unified Properties) parser for JavaScript and TypeScript",
+  "main": "dist/up.js",
+  "types": "up.d.ts",
+  "module": "up.mjs",
+  "exports": {
+    ".": {
+      "types": "./up.d.ts",
+      "import": "./up.mjs",
+      "require": "./up.js"
+    }
+  },
+  "files": [
+    "up.js",
+    "up.mjs",
+    "up.d.ts",
+    "up.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "lint": "tsc --noEmit",
+    "format": "prettier --write *.ts *.js",
+    "build": "tsc",
+    "prepublishOnly": "npm test"
+  },
+  "keywords": [
+    "up",
+    "uplang",
+    "parser",
+    "configuration",
+    "data-format",
+    "json",
+    "yaml",
+    "toml",
+    "config",
+    "serialization"
+  ],
+  "author": "UP Lang Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/uplang/up-js"
+  },
+  "bugs": {
+    "url": "https://github.com/uplang/up-js/issues"
+  },
+  "homepage": "https://uplang.org",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0"
+  }
+}
