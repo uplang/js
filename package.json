@@ -1,8 +1,9 @@
 {
   "name": "@uplang/up",
   "version": "1.0.0",
+  "type": "module",
   "description": "UP (Unified Properties) parser for JavaScript and TypeScript",
-  "main": "up.js",
+  "main": "dist/up.js",
   "types": "up.d.ts",
   "module": "up.mjs",
   "exports": {

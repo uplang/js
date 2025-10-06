@@ -1,306 +1,320 @@
 /**
- * UP Parser for TypeScript
- * Structured Notation for Annotated Properties
+ * UP (Unified Properties) parser for TypeScript
  *
- * Usage:
- *   import { parse, UpParser } from './up';
- *   const doc = parse(upText);
- *   console.log(JSON.stringify(doc, null, 2));
+ * A modern, human-friendly data serialization format parser.
+ *
+ * @example
+ * ```typescript
+ * import { parse, Parser } from './up';
+ *
+ * const input = `
+ * name John Doe
+ * age!int 30
+ * `;
+ *
+ * const doc = parse(input);
+ * ```
  */
 
-export interface UpNode {
+/**
+ * Block (nested key-value pairs)
+ */
+export interface Block {
+  [key: string]: Value;
+}
+
+/**
+ * List of values
+ */
+export interface List extends Array<Value> {}
+
+/**
+ * Represents any UP value
+ */
+export type Value = string | Block | List | Table;
+
+/**
+ * Table with columns and rows
+ */
+export interface Table {
+  columns: Value[];
+  rows: Value[][];
+}
+
+/**
+ * A key-value node with optional type annotation
+ */
+export interface Node {
+  /** The key name */
   key: string;
-  type: string;
-  value: UpValue;
+  /** Optional type annotation (e.g., "int", "bool", "list") */
+  typeAnnotation?: string | undefined;
+  /** The value */
+  value: Value;
 }
 
-export type UpValue = string | UpBlock | UpList | UpTable;
-export type UpBlock = { [key: string]: UpValue };
-export type UpList = UpValue[];
-export interface UpTable {
-  columns: string[];
-  rows: string[][];
-}
+/**
+ * Represents a parsed UP document
+ */
+export class Document {
+  /** Top-level nodes in the document */
+  public nodes: Node[];
 
-export class UpParser {
-  #lines: string[] = [];
-  #lineNum = 0;
-
-  /**
-   * Parse a UP document from a string
-   */
-  parse(input: string): UpNode[] {
-    this.#lines = input.split(/\r?\n/);
-    this.#lineNum = 0;
-    return this.#parseNodes();
+  constructor(nodes: Node[] = []) {
+    this.nodes = nodes;
   }
 
-  /**
-   * Parse nodes until end of input or closing delimiter
-   */
-  #parseNodes(endDelimiter: string | null = null): UpNode[] {
-    const nodes: UpNode[] = [];
-
-    while (this.#lineNum < this.#lines.length) {
-      const line = this.#lines[this.#lineNum]!;
-      const trimmed = line.trim();
-
-      // Check for end delimiter
-      if (endDelimiter && trimmed === endDelimiter) {
-        this.#lineNum++;
-        break;
-      }
-
-      // Skip empty lines and comments
-      if (trimmed === '' || trimmed.startsWith('#')) {
-        this.#lineNum++;
-        continue;
-      }
-
-      const node = this.#parseLine(line);
-      if (node) {
-        nodes.push(node);
-      }
-    }
-
-    return nodes;
-  }
-
-  /**
-   * Parse a single line into a node
-   */
-  #parseLine(line: string): UpNode | null {
-    const trimmed = line.trim();
-
-    // Split into key part and value part
-    const firstSpace = trimmed.search(/\s/);
-    let keyPart: string, valuePart: string;
-
-    if (firstSpace === -1) {
-      keyPart = trimmed;
-      valuePart = '';
-    } else {
-      keyPart = trimmed.substring(0, firstSpace);
-      valuePart = trimmed.substring(firstSpace).trim();
-    }
-
-    // Parse key and type annotation
-    const bangIndex = keyPart.indexOf('!');
-    let key: string, type: string;
-
-    if (bangIndex !== -1) {
-      key = keyPart.substring(0, bangIndex);
-      type = keyPart.substring(bangIndex + 1);
-    } else {
-      key = keyPart;
-      type = '';
-    }
-
-    this.#lineNum++;
-
-    // Parse value based on what it starts with
-    const value = this.#parseValue(valuePart, type);
-
-    return {
-      key,
-      type,
-      value
-    };
-  }
-
-  /**
-   * Parse a value based on its format
-   */
-  #parseValue(valuePart: string, type: string): UpValue {
-    if (valuePart.startsWith('```')) {
-      return this.#parseMultiline(valuePart, type);
-    } else if (valuePart === '{') {
-      return this.#parseBlock();
-    } else if (valuePart === '[') {
-      return this.#parseList();
-    } else if (type === 'table' && valuePart.startsWith('{')) {
-      return this.#parseTable();
-    } else {
-      return valuePart;
-    }
-  }
-
-  /**
-   * Parse a multiline block (```)
-   */
-  #parseMultiline(firstLine: string, typeAnnotation: string): string {
-    const langHint = firstLine.substring(3).trim();
-    const content: string[] = [];
-
-    while (this.#lineNum < this.#lines.length) {
-      const line = this.#lines[this.#lineNum]!;
-      if (line.trim() === '```') {
-        this.#lineNum++;
-        break;
-      }
-      content.push(line);
-      this.#lineNum++;
-    }
-
-    let text = content.join('\n');
-
-    // Apply dedent if type is numeric
-    if (typeAnnotation && /^\d+$/.test(typeAnnotation)) {
-      const dedentCount = parseInt(typeAnnotation, 10);
-      text = this.#dedent(text, dedentCount);
-    }
-
-    return text;
-  }
-
-  /**
-   * Remove N spaces from the beginning of each line
-   */
-  #dedent(text: string, count: number): string {
-    const lines = text.split('\n');
-    return lines.map(line => {
-      if (line.length >= count) {
-        return line.substring(count);
-      }
-      return line;
-    }).join('\n');
-  }
-
-  /**
-   * Parse a block ({ ... })
-   */
-  #parseBlock(): UpBlock {
-    const block: UpBlock = {};
-    const nodes = this.#parseNodes('}');
-
-    for (const node of nodes) {
-      block[node.key] = node.value;
-    }
-
-    return block;
-  }
-
-  /**
-   * Parse a list ([ ... ])
-   */
-  #parseList(): UpList {
-    const list: UpList = [];
-
-    while (this.#lineNum < this.#lines.length) {
-      const line = this.#lines[this.#lineNum]!;
-      const trimmed = line.trim();
-
-      if (trimmed === ']') {
-        this.#lineNum++;
-        break;
-      }
-
-      if (trimmed === '' || trimmed.startsWith('#')) {
-        this.#lineNum++;
-        continue;
-      }
-
-      // Check if it's a nested block or inline list
-      if (trimmed === '{') {
-        this.#lineNum++;
-        list.push(this.#parseBlock());
-      } else if (trimmed.startsWith('[')) {
-        const inlineList = this.#parseInlineList(trimmed);
-        list.push(inlineList);
-        this.#lineNum++;
-      } else {
-        list.push(trimmed);
-        this.#lineNum++;
-      }
-    }
-
-    return list;
-  }
-
-  /**
-   * Parse an inline list: [item1, item2, item3]
-   */
-  #parseInlineList(line: string): string[] {
-    // Remove [ and ]
-    const content = line.substring(1, line.lastIndexOf(']')).trim();
-
-    if (content === '') {
-      return [];
-    }
-
-    // Split by comma and trim each item
-    return content.split(',').map(item => item.trim());
-  }
-
-  /**
-   * Parse a table structure
-   */
-  #parseTable(): UpTable {
-    const table: Partial<UpTable> = {};
-
-    while (this.#lineNum < this.#lines.length) {
-      const line = this.#lines[this.#lineNum]!;
-      const trimmed = line.trim();
-
-      if (trimmed === '}') {
-        this.#lineNum++;
-        break;
-      }
-
-      if (trimmed === '' || trimmed.startsWith('#')) {
-        this.#lineNum++;
-        continue;
-      }
-
-      if (trimmed.startsWith('columns')) {
-        const listPart = trimmed.substring('columns'.length).trim();
-        table.columns = this.#parseInlineList(listPart);
-        this.#lineNum++;
-      } else if (trimmed.startsWith('rows')) {
-        this.#lineNum++;
-        table.rows = this.#parseBlockOfLists();
-      }
-    }
-
-    return table as UpTable;
-  }
-
-  /**
-   * Parse a block of inline lists (rows)
-   */
-  #parseBlockOfLists(): string[][] {
-    const rows: string[][] = [];
-
-    while (this.#lineNum < this.#lines.length) {
-      const line = this.#lines[this.#lineNum]!;
-      const trimmed = line.trim();
-
-      if (trimmed === '}') {
-        this.#lineNum++;
-        break;
-      }
-
-      if (trimmed === '' || trimmed.startsWith('#')) {
-        this.#lineNum++;
-        continue;
-      }
-
-      if (trimmed.startsWith('[')) {
-        rows.push(this.#parseInlineList(trimmed));
-        this.#lineNum++;
-      }
-    }
-
-    return rows;
+  /** Check if document is empty */
+  isEmpty(): boolean {
+    return this.nodes.length === 0;
   }
 }
 
 /**
- * Parse a UP document string
+ * Parse error
  */
-export function parse(input: string): UpNode[] {
-  return new UpParser().parse(input);
+export class ParseError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ParseError';
+  }
 }
 
-export default { parse, UpParser };
+/**
+ * UP document parser with configurable behavior
+ */
+export class Parser {
+  /**
+   * Parse a UP document from a string
+   */
+  parseDocument(input: string): Document {
+    const lines = input.split('\n');
+    const nodes: Node[] = [];
+    let i = 0;
 
+    while (i < lines.length) {
+      const line = lines[i];
+      if (!line) {
+        i++;
+        continue;
+      }
+      const trimmed = line.trim();
+
+      // Skip empty lines and comments
+      if (!trimmed || trimmed.startsWith('#')) {
+        i++;
+        continue;
+      }
+
+      try {
+        const { node, nextIndex } = this.#parseLine(lines, i);
+        nodes.push(node);
+        i = nextIndex;
+      } catch (error) {
+        throw new ParseError(
+          `line ${i + 1}: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+
+    return new Document(nodes);
+  }
+
+  #parseLine(lines: string[], startIndex: number): { node: Node; nextIndex: number } {
+    const line = lines[startIndex] || '';
+    const [keyPart, valPart] = this.#splitKeyValue(line);
+    const [key, typeAnnotation] = this.#parseKeyAndType(keyPart);
+
+    const { value, nextIndex } = this.#parseValue(lines, startIndex, valPart, typeAnnotation);
+
+    return {
+      node: {
+        key,
+        typeAnnotation: typeAnnotation ?? undefined,
+        value,
+      },
+      nextIndex,
+    };
+  }
+
+  #splitKeyValue(line: string): [string, string] {
+    const match = line.match(/^(\S+)\s*(.*)$/);
+    if (!match) {
+      return [line.trim(), ''];
+    }
+    return [match[1] || '', match[2] || ''];
+  }
+
+  #parseKeyAndType(keyPart: string): [string, string | null] {
+    const idx = keyPart.indexOf('!');
+    if (idx === -1) {
+      return [keyPart, null];
+    }
+    return [keyPart.slice(0, idx), keyPart.slice(idx + 1)];
+  }
+
+  #parseValue(
+    lines: string[],
+    startIndex: number,
+    valPart: string,
+    typeAnnotation: string | null
+  ): { value: Value; nextIndex: number } {
+    // Multiline string
+    if (valPart.startsWith('```')) {
+      return this.#parseMultiline(lines, startIndex + 1, typeAnnotation);
+    }
+
+    // Block
+    if (valPart === '{') {
+      return this.#parseBlock(lines, startIndex + 1);
+    }
+
+    // List
+    if (valPart === '[') {
+      return this.#parseList(lines, startIndex + 1);
+    }
+
+    // Inline list
+    if (valPart.startsWith('[') && valPart.endsWith(']')) {
+      return {
+        value: this.#parseInlineList(valPart),
+        nextIndex: startIndex + 1,
+      };
+    }
+
+    // Scalar
+    return {
+      value: valPart,
+      nextIndex: startIndex + 1,
+    };
+  }
+
+  #parseMultiline(
+    lines: string[],
+    startIndex: number,
+    typeAnnotation: string | null
+  ): { value: string; nextIndex: number } {
+    const content: string[] = [];
+    let i = startIndex;
+
+    while (i < lines.length) {
+      const line = lines[i];
+      if (!line) break;
+      const trimmed = line.trim();
+
+      if (trimmed === '```') {
+        i++;
+        break;
+      }
+
+      content.push(line);
+      i++;
+    }
+
+    let text = content.join('\n');
+
+    // Apply dedenting if type annotation is a number
+    if (typeAnnotation) {
+      const dedentAmount = parseInt(typeAnnotation, 10);
+      if (!isNaN(dedentAmount)) {
+        text = this.#dedent(text, dedentAmount);
+      }
+    }
+
+    return { value: text, nextIndex: i };
+  }
+
+  #parseBlock(lines: string[], startIndex: number): { value: Block; nextIndex: number } {
+    const block: Block = {};
+    let i = startIndex;
+
+    while (i < lines.length) {
+      const line = lines[i];
+      if (!line) break;
+      const trimmed = line.trim();
+
+      if (trimmed === '}') {
+        i++;
+        break;
+      }
+
+      // Skip empty lines and comments
+      if (!trimmed || trimmed.startsWith('#')) {
+        i++;
+        continue;
+      }
+
+      const { node, nextIndex } = this.#parseLine(lines, i);
+      block[node.key] = node.value;
+      i = nextIndex;
+    }
+
+    return { value: block, nextIndex: i };
+  }
+
+  #parseList(lines: string[], startIndex: number): { value: List; nextIndex: number } {
+    const list: Value[] = [];
+    let i = startIndex;
+
+    while (i < lines.length) {
+      const line = lines[i];
+      if (!line) break;
+      const trimmed = line.trim();
+
+      if (trimmed === ']') {
+        i++;
+        break;
+      }
+
+      // Skip empty lines and comments
+      if (!trimmed || trimmed.startsWith('#')) {
+        i++;
+        continue;
+      }
+
+      // Inline list within multiline list
+      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+        list.push(this.#parseInlineList(trimmed));
+        i++;
+      }
+      // Nested block
+      else if (trimmed === '{') {
+        const { value, nextIndex } = this.#parseBlock(lines, i + 1);
+        list.push(value);
+        i = nextIndex;
+      }
+      // Scalar
+      else {
+        list.push(trimmed);
+        i++;
+      }
+    }
+
+    return { value: list, nextIndex: i };
+  }
+
+  #parseInlineList(s: string): List {
+    let content = s.trim();
+    content = content.slice(1, -1); // Remove [ and ]
+
+    if (!content.trim()) {
+      return [];
+    }
+
+    return content.split(',').map((item) => item.trim());
+  }
+
+  #dedent(text: string, amount: number): string {
+    return text
+      .split('\n')
+      .map((line) => (line.length >= amount ? line.slice(amount) : line))
+      .join('\n');
+  }
+}
+
+/**
+ * Parse UP document from a string (convenience function)
+ */
+export function parse(input: string): Document {
+  return new Parser().parseDocument(input);
+}
